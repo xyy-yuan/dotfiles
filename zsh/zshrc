@@ -1,67 +1,47 @@
 # =====================================================================
-# 1. Starship 自动检测、本地安装与启动逻辑 (无需 sudo 权限)
+# 1. 基础环境
 # =====================================================================
-LOCAL_BIN="$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+export LANG=en_US.UTF-8
 
-if ! command -v starship &> /dev/null; then
-    if [ -f "$LOCAL_BIN/starship" ]; then
-        export PATH="$LOCAL_BIN:$PATH"
-    else
-        echo "🚀 发现未安装 Starship，正在为您自动部署到 $LOCAL_BIN ..."
-        mkdir -p "$LOCAL_BIN"
-        # 使用官方脚本本地安装
-        curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$LOCAL_BIN"
-        export PATH="$LOCAL_BIN:$PATH"
-    fi
-fi
-
+# =====================================================================
+# 2. Starship 主题点火
+# =====================================================================
 if command -v starship &> /dev/null; then
     eval "$(starship init zsh)"
 fi
 
 # =====================================================================
-# 2. Zsh 必备插件：自动安装与加载逻辑 (迁移神器)
+# 3. 插件加载 (由 setup.sh 负责下载)
 # =====================================================================
-function plugin_init() {
-    local plugin_name=$1
-    local git_url=$2
-    local plugin_dir="$HOME/.zsh/$plugin_name"
-    
-    if [ ! -d "$plugin_dir" ]; then
-        echo "⏳ 发现缺失插件，正在自动下载: $plugin_name ..."
-        git clone --depth 1 "$git_url" "$plugin_dir"
-    fi
-    
-    if [ -f "$plugin_dir/${plugin_name}.zsh" ]; then
-        source "$plugin_dir/${plugin_name}.zsh"
-    fi
-}
-
-mkdir -p ~/.zsh
-plugin_init "zsh-autosuggestions" "https://github.com/zsh-users/zsh-autosuggestions.git"
-plugin_init "zsh-syntax-highlighting" "https://github.com/zsh-users/zsh-syntax-highlighting.git"
+ZSH_PLUG_DIR="$HOME/.zsh"
+[ -f "$ZSH_PLUG_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && source "$ZSH_PLUG_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
+[ -f "$ZSH_PLUG_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] && source "$ZSH_PLUG_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 
 # =====================================================================
-# 3. 跨平台差异化配置 (Mac & Linux 自动切换)
+# 4. 跨平台探测
 # =====================================================================
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    # --- MacBook 专属配置 ---
     alias ls='ls -G' 
-    
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # --- Linux 服务器专属配置 ---
     alias ls='ls --color=auto'
     alias smi='watch -n 1 nvidia-smi'
-    
-    # 自动识别 Conda 路径
-    if [ -d "$HOME/miniconda3" ]; then
-        export PATH="$HOME/miniconda3/bin:$PATH"
-    elif [ -d "$HOME/ENTER" ]; then
-        export PATH="$HOME/ENTER/bin:$PATH"
-    fi
+    # 智能探测加载 Conda (无需写死路径)
+    for conda_path in "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/ENTER"; do
+        if [ -d "$conda_path" ]; then
+            source "$conda_path/etc/profile.d/conda.sh"
+            break
+        fi
+    done
 fi
 
 # 通用别名
 alias c='clear'
 alias ..='cd ..'
 alias ll='ls -alF'
+alias gs='git status'
+
+# =====================================================================
+# 5. 【核心】加载本地私有配置 (如本地 Conda 块)
+# =====================================================================
+[ -f ~/.zshrc.local ] && source ~/.zshrc.local
