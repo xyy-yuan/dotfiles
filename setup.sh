@@ -1,52 +1,81 @@
-#!/bin/bash
+k#!/bin/bash
 
-# --- 颜色定义 (让输出不枯燥) ---
+# --- 颜色与基础设置 ---
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${BLUE}===> [施工开始] 正在为您的一站式终端进行环境初始化...${NC}"
+echo -e "${BLUE}===> [自动化环境初始化] 启动中...${NC}"
 
-# 1. 基础文件夹建设
-mkdir -p ~/.config
-mkdir -p ~/.zsh
-mkdir -p ~/.local/bin
+# 创建必要的本地目录
+mkdir -p ~/.local/bin ~/.zsh ~/.config
 
-# 2. 安装 Starship (本地安装，无需 sudo)
+# --- 权限检查函数 ---
+can_sudo() {
+    # 检查当前用户是否有 sudo 权限且无需交互
+    if sudo -n true 2>/dev/null; then return 0; else return 1; fi
+}
+
+# --- 1. 确保 Git 存在 ---
+if ! command -v git &> /dev/null; then
+    echo -e "${YELLOW}检测到 Git 缺失...${NC}"
+    if can_sudo; then
+        sudo apt-get update && sudo apt-get install -y git
+    else
+        echo -e "${RED}错误：无 sudo 权限且未发现 Git，请联系管理员预装基础工具。${NC}"
+        exit 1
+    fi
+fi
+
+# --- 2. 确保 Git LFS 存在 ---
+if ! command -v git-lfs &> /dev/null; then
+    echo -e "${YELLOW}正在安装 Git LFS...${NC}"
+    if can_sudo; then
+        sudo apt-get update && sudo apt-get install -y git-lfs
+    else
+        # 非 sudo 方案：下载二进制包
+        LFS_URL="https://github.com/git-lfs/git-lfs/releases/download/v3.4.0/git-lfs-linux-amd64-v3.4.0.tar.gz"
+        curl -L $LFS_URL | tar xz -C /tmp
+        mv /tmp/git-lfs-3.4.0/git-lfs ~/.local/bin/
+    fi
+    git lfs install
+    echo -e "${GREEN}Git LFS 安装成功。${NC}"
+fi
+
+# --- 3. 确保 Miniconda 存在 ---
+if ! command -v conda &> /dev/null; then
+    echo -e "${YELLOW}正在安装 Miniconda...${NC}"
+    CONDA_INSTALLER="/tmp/miniconda_install.sh"
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o $CONDA_INSTALLER
+    # -b: 批量模式 (不提问), -p: 安装路径
+    bash $CONDA_INSTALLER -b -p $HOME/miniconda3
+    rm $CONDA_INSTALLER
+    echo -e "${GREEN}Miniconda 已安装至 ~/miniconda3${NC}"
+    echo -e "${YELLOW}请稍后手动运行 'conda init zsh' 或检查 .zshrc.local${NC}"
+fi
+
+# --- 4. 安装 Starship ---
 if ! command -v starship &> /dev/null; then
-    echo -e "${YELLOW}正在安装 Starship 主题引擎...${NC}"
+    echo -e "${YELLOW}正在安装 Starship...${NC}"
     curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin"
-else
-    echo -e "${GREEN}Starship 已存在，跳过安装。${NC}"
 fi
 
-# 3. 下载 Zsh 插件
-echo -e "${YELLOW}正在同步 Zsh 必备插件...${NC}"
-if [ ! -d "$HOME/.zsh/zsh-autosuggestions" ]; then
-    git clone --depth 1 https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
-fi
-if [ ! -d "$HOME/.zsh/zsh-syntax-highlighting" ]; then
-    git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
-fi
+# --- 5. 下载 Zsh 插件 ---
+echo -e "${YELLOW}同步 Zsh 插件...${NC}"
+[ ! -d "$HOME/.zsh/zsh-autosuggestions" ] && git clone --depth 1 https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
+[ ! -d "$HOME/.zsh/zsh-syntax-highlighting" ] && git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
 
-# 4. 牵红线 (建立软链接)
-echo -e "${YELLOW}正在建立配置文件关联...${NC}"
-# -f 代表强制覆盖，这样即使原本有旧文件也会被踢掉
+# --- 6. 建立软链接 ---
+echo -e "${YELLOW}配置文件挂载...${NC}"
 ln -sf ~/dotfiles/zsh/zshrc ~/.zshrc
 ln -sf ~/dotfiles/starship/starship.toml ~/.config/starship.toml
 
-# 5. 初始化本地私人储物柜 (关键！)
-# 如果不存在 .zshrc.local，就建一个空的，防止 zshrc 报错
+# --- 7. 初始化本地私人配置 ---
 if [ ! -f ~/.zshrc.local ]; then
-    echo -e "${YELLOW}创建空的本地私人配置表 (~/.zshrc.local)...${NC}"
     touch ~/.zshrc.local
-    echo "# 以后请把 Conda 初始化等特定机器的路径写在这里" >> ~/.zshrc.local
+    echo "# 存放本机特有的环境变量或 Conda 初始化代码" >> ~/.zshrc.local
 fi
 
-# 6. 最后的叮嘱
-echo -e "${GREEN}===> [施工完毕] 环境已就绪！${NC}"
-echo -e "${BLUE}后续动作建议：${NC}"
-echo -e "1. 如果当前不是 Zsh，请运行: ${YELLOW}chsh -s \$(which zsh)${NC}"
-echo -e "2. 别忘了把这台机器的 Conda 块移入 ${YELLOW}~/.zshrc.local${NC}"
-echo -e "3. 执行 ${YELLOW}exec zsh${NC} 立即体验新环境！"
+echo -e "${GREEN}===> [配置完成] 请执行 'exec zsh' 进入新世界！${NC}"
