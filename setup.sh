@@ -130,17 +130,20 @@ fi
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-LATEST_NVM_VERSION=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-LATEST_NVM_VERSION=${LATEST_NVM_VERSION:-v0.40.1}
+# 增加 -m 3 (3秒超时)，防止网络不佳时脚本死等
+LATEST_NVM_VERSION=$(curl -m 3 -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
 if ! command -v nvm &> /dev/null; then
+    # 如果没安装，且网络挂了没抓到，给一个默认的稳定版保底
+    LATEST_NVM_VERSION=${LATEST_NVM_VERSION:-v0.40.1}
     if ask_confirm "未找到 NVM。是否首次下载安装 ($LATEST_NVM_VERSION)？"; then
         curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/${LATEST_NVM_VERSION}/install.sh | bash
         [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     fi
 else
     CURRENT_NVM_VERSION="v$(nvm --version)"
-    if [ "$CURRENT_NVM_VERSION" != "$LATEST_NVM_VERSION" ]; then
+    # 【核心防御】只有当抓到了线上版本，且线上版本和本地不同时，才提示更新！
+    if [ -n "$LATEST_NVM_VERSION" ] && [ "$CURRENT_NVM_VERSION" != "$LATEST_NVM_VERSION" ]; then
         if ask_confirm "发现 NVM 新版本 ($LATEST_NVM_VERSION)，当前版本 ($CURRENT_NVM_VERSION)。是否更新？"; then
             curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/${LATEST_NVM_VERSION}/install.sh | bash
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
@@ -150,13 +153,15 @@ fi
 
 if command -v nvm &> /dev/null; then
     LATEST_NODE_LTS=$(nvm ls-remote --lts | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*' | tail -1)
+    
     if ! command -v node &> /dev/null; then
         if ask_confirm "未找到 Node.js。是否使用 NVM 安装最新 LTS 长期支持版？"; then
             nvm install --lts && nvm use --lts && nvm alias default 'lts/*'
         fi
     else
         CURRENT_NODE_VERSION=$(node -v)
-        if [ "$CURRENT_NODE_VERSION" != "$LATEST_NODE_LTS" ]; then
+        # 【核心防御】只有当抓到了 LTS 版本列表（不为空），且本地版本和线上不一致时，才提示！
+        if [ -n "$LATEST_NODE_LTS" ] && [ "$CURRENT_NODE_VERSION" != "$LATEST_NODE_LTS" ]; then
             if ask_confirm "发现 Node.js 新 LTS 版本 ($LATEST_NODE_LTS)，当前 ($CURRENT_NODE_VERSION)。是否平滑更新并迁移全局包？"; then
                 nvm install --lts --reinstall-packages-from=current
                 nvm use --lts && nvm alias default 'lts/*'
