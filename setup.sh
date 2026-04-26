@@ -169,6 +169,36 @@ if command -v nvm &> /dev/null; then
         fi
     fi
 fi
+# --- 新增：Claude Code (AI Agent) 检查与安装 ---
+if ! command -v claude &> /dev/null; then
+    if ask_confirm "未找到 Claude Code (AI 编程助手)。是否立即安装？"; then
+        if [ "$MACHINE" == "Mac" ]; then
+            # Mac 专属路线：使用 Homebrew (Cask) 安装
+            echo -e "${GREEN}正在通过 Homebrew 安装 Claude Code...${NC}"
+            brew install --cask claude-code
+        elif [ "$MACHINE" == "Linux" ]; then
+            # Linux 专属路线：必须依赖 npm 全局安装
+            if command -v npm &> /dev/null; then
+                echo -e "${GREEN}正在通过 npm 全局安装 Claude Code...${NC}"
+                npm install -g @anthropic-ai/claude-code
+            else
+                echo -e "${RED}安装跳过：Linux 环境下需要 npm，请先确保上面的 Node.js 环境已成功安装。${NC}"
+            fi
+        fi
+        
+        # --- 极客专属：自动跳过新手引导 (Onboarding) ---
+        CLAUDE_CONFIG="$HOME/.claude.json"
+        if [ ! -f "$CLAUDE_CONFIG" ]; then
+            # 如果文件不存在，直接生成并注入配置
+            echo '{"hasCompletedOnboarding": true}' > "$CLAUDE_CONFIG"
+            echo -e "${GREEN}已自动为你生成 ~/.claude.json，完美跳过初次启动引导！${NC}"
+        else
+            # 如果文件已存在，使用黄色字强提醒
+            echo -e "${YELLOW}提示: 你的 ~/.claude.json 文件已存在。${NC}"
+            echo -e "${YELLOW}建议手动打开它，并确保里面包含: \"hasCompletedOnboarding\": true${NC}"
+        fi
+    fi
+fi
 
 # ==========================================
 # 4. 终端颜值与效率组件 (Starship & Zsh)
