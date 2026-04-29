@@ -201,44 +201,184 @@ if ! command -v claude &> /dev/null; then
 fi
 
 # ==========================================
-# 4. 终端颜值与效率组件 (Starship & Zsh)
+# 4. 终端颜值与效率组件 (Terminal, Starship, Zsh, Fonts)
 # ==========================================
+
+# --- 新增：强制重置 Mac 自带终端的外观主题 ---
+if [ "$MACHINE" == "Mac" ]; then
+    if ask_confirm "是否要将 Mac 自带终端 (Terminal.app) 的外观配色恢复为默认的 'Basic' 纯净主题？"; then
+        echo -e "${YELLOW}正在通过 AppleScript 重置终端外观...${NC}"
+        # 告诉 Mac 终端：以后新建的窗口都用 Basic 主题
+        osascript -e 'tell application "Terminal" to set default settings to settings set "Basic"'
+        # 告诉 Mac 终端：把当前正在开着的窗口也立刻变成 Basic 主题
+        osascript -e 'tell application "Terminal" to set current settings of tabs of windows to settings set "Basic"'
+        echo -e "${GREEN}✔ Mac 终端外观已成功重置为初始状态！${NC}"
+    fi
+fi
+
+echo -e "${YELLOW}正在检查系统 Nerd Font 极客字体环境...${NC}"
+FONT_INSTALLED=false
+
+# 粗略判断字体是否已存在
+if [ "$MACHINE" == "Mac" ]; then
+    if system_profiler SPFontsDataType 2>/dev/null | grep -q "MesloLGS NF"; then
+        FONT_INSTALLED=true
+    fi
+elif command -v fc-list &> /dev/null; then
+    if fc-list | grep -q "MesloLGS NF"; then
+        FONT_INSTALLED=true
+    fi
+fi
+
+if [ "$FONT_INSTALLED" = false ]; then
+    if ask_confirm "未检测到 Starship 必须的极客字体 (MesloLGS Nerd Font)。是否立即下载安装？"; then
+        echo -e "${GREEN}正在全自动安装极客字体 (这会让你的终端图标完美显示)...${NC}"
+        if [ "$MACHINE" == "Mac" ]; then
+            # Mac 使用 Brew 一键安装
+            brew install --cask font-meslo-lg-nerd-font
+            echo -e "${GREEN}✔ Mac 极客字体安装完成！已自动加入字体册。${NC}"
+        else
+            # Linux 环境手动拉取字体文件
+            FONT_DIR="$HOME/.local/share/fonts"
+            mkdir -p "$FONT_DIR"
+            echo -e "${BLUE}正在从 GitHub 拉取字体文件，请稍候...${NC}"
+            # 静默下载四个核心字重
+            curl -sSLo "$FONT_DIR/MesloLGS NF Regular.ttf" "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Regular.ttf"
+            curl -sSLo "$FONT_DIR/MesloLGS NF Bold.ttf" "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold.ttf"
+            curl -sSLo "$FONT_DIR/MesloLGS NF Italic.ttf" "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf"
+            curl -sSLo "$FONT_DIR/MesloLGS NF Bold Italic.ttf" "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf"
+            
+            # 刷新 Linux 字体缓存，使其立即生效
+            if command -v fc-cache &> /dev/null; then
+                fc-cache -f -v > /dev/null
+                echo -e "${GREEN}✔ Linux 字体缓存已刷新！字体已激活。${NC}"
+            else
+                echo -e "${YELLOW}提示: 字体文件已就位，但未找到 fc-cache 命令。${NC}"
+            fi
+        fi
+    fi
+else
+    echo -e "${GREEN}✔ 极客字体 (MesloLGS NF) 已安装，图标支持就绪。${NC}"
+fi
+
+# starship与插件安装
 if ! command -v starship &> /dev/null; then
     if ask_confirm "未找到 Starship 主题。是否下载安装？"; then
-        curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin"
+        if [ "$MACHINE" == "Mac" ]; then
+            # Mac 路线：使用 Homebrew
+            echo -e "${GREEN}正在通过 Homebrew 安装 Starship...${NC}"
+            brew install starship
+        else
+            # Linux 路线：使用官方纯净脚本
+            echo -e "${GREEN}正在通过官方脚本安装 Starship...${NC}"
+            curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin"
+        fi
     fi
 fi
 
-if [ ! -d "$HOME/.zsh/zsh-autosuggestions" ] || [ ! -d "$HOME/.zsh/zsh-syntax-highlighting" ]; then
-    if ask_confirm "检测到 Zsh 效率插件未完全同步。是否从 GitHub 克隆下载？"; then
-        [ ! -d "$HOME/.zsh/zsh-autosuggestions" ] && git clone --depth 1 https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
-        [ ! -d "$HOME/.zsh/zsh-syntax-highlighting" ] && git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
+if [ "$MACHINE" == "Mac" ]; then
+    # Mac 专属：使用 Brew 安装和管理 Zsh 插件
+    if [ ! -d "$(brew --prefix)/share/zsh-autosuggestions" ] || [ ! -d "$(brew --prefix)/share/zsh-syntax-highlighting" ]; then
+        if ask_confirm "检测到 Zsh 效率插件未安装。是否通过 Homebrew 下载？"; then
+            echo -e "${GREEN}正在通过 Homebrew 安装 Zsh 插件...${NC}"
+            brew install zsh-autosuggestions zsh-syntax-highlighting
+        fi
+    fi
+else
+    # Linux 专属：依然使用 Git Clone 到本地 (无需 root 和 brew)
+    if [ ! -d "$HOME/.zsh/zsh-autosuggestions" ] || [ ! -d "$HOME/.zsh/zsh-syntax-highlighting" ]; then
+        if ask_confirm "检测到 Zsh 效率插件未完全同步。是否从 GitHub 克隆下载？"; then
+            [ ! -d "$HOME/.zsh/zsh-autosuggestions" ] && git clone --depth 1 https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
+            [ ! -d "$HOME/.zsh/zsh-syntax-highlighting" ] && git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
+        fi
     fi
 fi
 
 # ==========================================
-# 5. 收尾：配置文件挂载与极其重要的身份认证
+# 5. 收尾：配置文件挂载与动态配置追加
 # ==========================================
 echo -e "\n${YELLOW}正在挂载 Dotfiles 软链接...${NC}"
 ln -sf ~/dotfiles/zsh/zshrc ~/.zshrc
 ln -sf ~/dotfiles/starship/starship.toml ~/.config/starship.toml
 
+# 1. 确保 .zshrc.local 文件存在
 if [ ! -f ~/.zshrc.local ]; then
     touch ~/.zshrc.local
-    echo "# 存放本机特有的环境变量或 Conda 初始化代码" >> ~/.zshrc.local
+    echo "# 存放本机特有的环境变量或初始化代码" >> ~/.zshrc.local
     echo "# 注意：等号两边绝对不能有空格！" >> ~/.zshrc.local
     echo 'export STARSHIP_ROLE="YourNameHere"' >> ~/.zshrc.local
     echo -e "${GREEN}已为你创建缺省的 ~/.zshrc.local 模板。${NC}"
 fi
 
+echo -e "${YELLOW}正在向 ~/.zshrc.local 注入核心组件路径...${NC}"
+
+# 2. 注入 NVM / Node.js 初始化代码 (防重复)
+if ! grep -q 'export NVM_DIR="$HOME/.nvm"' ~/.zshrc.local; then
+    echo "" >> ~/.zshrc.local
+    echo "# 初始化 NVM (Node Version Manager)" >> ~/.zshrc.local
+    echo 'export NVM_DIR="$HOME/.nvm"' >> ~/.zshrc.local
+    echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm' >> ~/.zshrc.local
+    echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion' >> ~/.zshrc.local
+    echo -e "${GREEN}✔ NVM 路径已添加${NC}"
+fi
+
+# 3. 注入 Miniconda 初始化代码 (防重复)
+if ! grep -q "conda shell.zsh hook" ~/.zshrc.local; then
+    echo "" >> ~/.zshrc.local
+    echo "# 初始化 Miniconda" >> ~/.zshrc.local
+    # 使用动态 hook 方式，最干净，不污染环境变量
+    echo 'eval "$($HOME/miniconda3/bin/conda shell.zsh hook 2>/dev/null)"' >> ~/.zshrc.local
+    echo -e "${GREEN}✔ Miniconda 路径已添加${NC}"
+fi
+
+# 4. 注入 Starship 初始化命令 (防重复)
+if ! grep -q "starship init zsh" ~/.zshrc.local; then
+    echo "" >> ~/.zshrc.local
+    echo "# 初始化 Starship 提示符" >> ~/.zshrc.local
+    echo 'eval "$(starship init zsh)"' >> ~/.zshrc.local
+    echo -e "${GREEN}✔ Starship 启动命令已添加${NC}"
+fi
+
+# 5. 注入 Zsh 插件路径 (区分 Mac 和 Linux，防重复)
+if [ "$MACHINE" == "Mac" ]; then
+    if ! grep -q "zsh-autosuggestions.zsh" ~/.zshrc.local; then
+        echo "" >> ~/.zshrc.local
+        echo "# 自动建议（灰色提示）" >> ~/.zshrc.local
+        echo 'source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh' >> ~/.zshrc.local
+    fi
+    if ! grep -q "zsh-syntax-highlighting.zsh" ~/.zshrc.local; then
+        echo "# 语法高亮（命令颜色）" >> ~/.zshrc.local
+        echo 'source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh' >> ~/.zshrc.local
+        echo -e "${GREEN}✔ Mac 版 Zsh 插件路径已添加${NC}"
+    fi
+else
+    # Linux 使用本地克隆的路径
+    if ! grep -q "zsh-autosuggestions.zsh" ~/.zshrc.local; then
+        echo "" >> ~/.zshrc.local
+        echo "# 自动建议（灰色提示）" >> ~/.zshrc.local
+        echo 'source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh' >> ~/.zshrc.local
+    fi
+    if ! grep -q "zsh-syntax-highlighting.zsh" ~/.zshrc.local; then
+        echo "# 语法高亮（命令颜色）" >> ~/.zshrc.local
+        echo 'source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh' >> ~/.zshrc.local
+        echo -e "${GREEN}✔ Linux 版 Zsh 插件路径已添加${NC}"
+    fi
+fi
+
 # --- 醒目的多设备配置提醒 ---
 echo -e "\n${RED}======================================================================${NC}"
-echo -e "${RED}⚠️  极其重要的最后一步：在.zshrc.local配置你的专属终端身份 ⚠️${NC}"
-echo -e "${YELLOW}为了让 Starship 正确显示当前设备的名称，请务必执行以下操作：${NC}"
-echo -e "1. 输入命令打开本地配置：${BLUE}nano ~/.zshrc.local${NC}"
-echo -e "2. 找到并修改变量为你的设备名 (如 MACyxy, HUSTyxy, JLUyxy)："
-echo -e "   ${GREEN}export STARSHIP_ROLE=\"你的专属名字\"${NC}"
-echo -e "3. 保存退出后，敲下重启魔法：${BLUE}exec zsh${NC}"
+echo -e "${RED}⚠️  极其重要的最后两步：配置身份与激活字体 ⚠️${NC}"
+echo -e "${YELLOW}为了让终端完美运作，请必须执行以下操作：${NC}"
+echo -e "\n${BLUE}【任务 1：配置专属终端身份】${NC}"
+echo -e "1. 输入命令打开本地配置：${GREEN}nano ~/.zshrc.local${NC}"
+echo -e "2. 找到并修改变量为你的设备名 (如 MACyxy, HUSTyxy)："
+echo -e "   export STARSHIP_ROLE=\"你的专属名字\""
+echo -e "3. 保存退出后，敲下重启魔法：${GREEN}exec zsh${NC}"
+echo -e "\n${BLUE}【任务 2：手动在终端软件中应用字体 (仅首次需要)】${NC}"
+echo -e "由于脚本无法修改你的图形界面，请务必手动设置："
+echo -e "- ${YELLOW}Mac 自带终端:${NC} 偏好设置 -> 描述文件 -> 文本 -> 字体 -> 更改为 ${GREEN}MesloLGS NF${NC}"
+echo -e "- ${YELLOW}VS Code:${NC} 设置 -> 搜索 'Terminal Font' -> 填入 ${GREEN}'MesloLGS NF'${NC}"
+echo -e "- ${YELLOW}iTerm2:${NC} Preferences -> Profiles -> Text -> Font -> 选 ${GREEN}MesloLGS NF${NC}"
 echo -e "${RED}======================================================================\n${NC}"
 
-echo -e "${GREEN}===> [基础配置全部完成] ${NC}"
+echo -e "${GREEN}===> [基础配置全部完成] 欢迎来到极客新世界！${NC}"

@@ -1,38 +1,18 @@
 # =====================================================================
-# 1. 基础环境
+# 1. 基础环境与编码
 # =====================================================================
 export PATH="$HOME/.local/bin:$PATH"
 export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 
 # =====================================================================
-# 2. Starship 主题点火
-# =====================================================================
-if command -v starship &> /dev/null; then
-    eval "$(starship init zsh)"
-fi
-
-# =====================================================================
-# 3. 插件加载 (由 setup.sh 负责下载)
-# =====================================================================
-ZSH_PLUG_DIR="$HOME/.zsh"
-[ -f "$ZSH_PLUG_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && source "$ZSH_PLUG_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
-[ -f "$ZSH_PLUG_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] && source "$ZSH_PLUG_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-
-# =====================================================================
-# 4. 跨平台探测
+# 2. 跨平台别名 (Aliases)
 # =====================================================================
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    alias ls='ls -G' 
+    alias ls='ls -G'
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     alias ls='ls --color=auto'
     alias smi='watch -n 1 nvidia-smi'
-    # 智能探测加载 Conda (无需写死路径)
-    for conda_path in "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/ENTER"; do
-        if [ -d "$conda_path" ]; then
-            source "$conda_path/etc/profile.d/conda.sh"
-            break
-        fi
-    done
 fi
 
 # 通用别名
@@ -42,6 +22,7 @@ alias ll='ls -alF'
 alias gs='git status'
 
 # =====================================================================
-# 5. 【核心】加载本地私有配置 (如本地 Conda 块)
+# 3. 【核心】接管本地私有配置与环境初始化
 # =====================================================================
+# 这里会加载由 setup.sh 自动生成的环境 (Starship, NVM, Conda, 插件等)
 [ -f ~/.zshrc.local ] && source ~/.zshrc.local

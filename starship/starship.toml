@@ -56,7 +56,7 @@ disabled = true
 
 [env_var.my_role]
 variable = "STARSHIP_ROLE"
-default = "yuanxiaoyu"      # 如果没有设置变量，默认显示的名字
+default = "user"      # 如果没有设置变量，默认显示的名字
 style = "bg:red fg:crust"   # 完美继承你的背景红、前景黑配色！
 format = '[ $env_value]($style)' # 完美继承你的方括号格式！
 
