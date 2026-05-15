@@ -1,2 +1,8 @@
 .DS_Store
 **/.DS_Store
+.agents/
+.claude/
+AGENT.md
+AGENTS.md
+CLAUDE.md
+.gitnexus/
